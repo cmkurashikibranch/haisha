@@ -1,0 +1,1515 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+<title>配車ボード</title>
+<style>
+:root{
+  font-size:16px;
+  /* 12色パレット（spec v1.3 §5-2・LIBのpaletteと同名）。淡い背景×濃い文字でコントラスト確保 */
+  --c-blue-bg:#dbeafe;   --c-blue-fg:#1e3a8a;   --c-blue-bd:#60a5fa;
+  --c-teal-bg:#ccfbf1;   --c-teal-fg:#134e4a;   --c-teal-bd:#2dd4bf;
+  --c-green-bg:#dcfce7;  --c-green-fg:#14532d;  --c-green-bd:#4ade80;
+  --c-orange-bg:#ffedd5; --c-orange-fg:#7c2d12; --c-orange-bd:#fb923c;
+  --c-red-bg:#fee2e2;    --c-red-fg:#7f1d1d;    --c-red-bd:#f87171;
+  --c-purple-bg:#f3e8ff; --c-purple-fg:#581c87; --c-purple-bd:#c084fc;
+  --c-pink-bg:#fce7f3;   --c-pink-fg:#831843;   --c-pink-bd:#f472b6;
+  --c-gray-bg:#e5e7eb;   --c-gray-fg:#1f2937;   --c-gray-bd:#9ca3af;
+  --c-indigo-bg:#e0e7ff; --c-indigo-fg:#312e81; --c-indigo-bd:#818cf8;
+  --c-amber-bg:#fef3c7;  --c-amber-fg:#78350f;  --c-amber-bd:#fbbf24;
+  --c-brown-bg:#efdcc9;  --c-brown-fg:#57351e;  --c-brown-bd:#b08050;
+  --c-cyan-bg:#cffafe;   --c-cyan-fg:#164e63;   --c-cyan-bd:#22d3ee;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif;background:#f5f6f8;color:#1f2937}
+.c-blue{background:var(--c-blue-bg);color:var(--c-blue-fg);border-color:var(--c-blue-bd)}
+.c-teal{background:var(--c-teal-bg);color:var(--c-teal-fg);border-color:var(--c-teal-bd)}
+.c-green{background:var(--c-green-bg);color:var(--c-green-fg);border-color:var(--c-green-bd)}
+.c-orange{background:var(--c-orange-bg);color:var(--c-orange-fg);border-color:var(--c-orange-bd)}
+.c-red{background:var(--c-red-bg);color:var(--c-red-fg);border-color:var(--c-red-bd)}
+.c-purple{background:var(--c-purple-bg);color:var(--c-purple-fg);border-color:var(--c-purple-bd)}
+.c-pink{background:var(--c-pink-bg);color:var(--c-pink-fg);border-color:var(--c-pink-bd)}
+.c-gray{background:var(--c-gray-bg);color:var(--c-gray-fg);border-color:var(--c-gray-bd)}
+.c-indigo{background:var(--c-indigo-bg);color:var(--c-indigo-fg);border-color:var(--c-indigo-bd)}
+.c-amber{background:var(--c-amber-bg);color:var(--c-amber-fg);border-color:var(--c-amber-bd)}
+.c-brown{background:var(--c-brown-bg);color:var(--c-brown-fg);border-color:var(--c-brown-bd)}
+.c-cyan{background:var(--c-cyan-bg);color:var(--c-cyan-fg);border-color:var(--c-cyan-bd)}
+.screen{display:none}
+.screen.active{display:block}
+.center-box{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{background:#fff;border:1px solid #d1d5db;border-radius:12px;padding:24px;max-width:420px;width:100%;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.card h1{font-size:1.25rem;margin:0 0 8px}
+.card p{margin:8px 0;line-height:1.6}
+.note{color:#6b7280;font-size:.875rem}
+input[type=text],input[type=password]{width:100%;min-height:44px;font-size:1rem;padding:8px 12px;border:1px solid #9ca3af;border-radius:8px}
+button{min-height:44px;font-size:1rem;padding:8px 16px;border-radius:8px;border:1px solid transparent;cursor:pointer}
+.btn-primary{background:#1d4ed8;color:#fff;width:100%}
+.btn-primary:disabled{background:#9ca3af;cursor:not-allowed}
+.pass-hint{font-size:.875rem;min-height:1.4em;margin:6px 0 12px;color:#b91c1c}
+.pass-hint.ok{color:#15803d}
+.pass-hint.warn{color:#b45309}
+.app-header{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:10px 16px;background:#fff;border-bottom:1px solid #d1d5db}
+.app-header h1{font-size:1.125rem;margin:0}
+/* --- 日付ナビ（T8） --- */
+.date-nav{display:flex;align-items:center;gap:6px;margin-left:auto}
+.nav-btn{background:#fff;border:1px solid #9ca3af;color:#1f2937;min-width:44px;padding:4px 10px}
+.nav-btn:disabled{color:#9ca3af;border-color:#e5e7eb;background:#f9fafb;cursor:default}
+#nav-date{font-weight:600;font-size:1.06rem;min-width:5em;text-align:center;white-space:nowrap}
+.cal-wrap{position:relative;display:inline-flex}
+/* 透明のdate入力をボタンに重ねる：tap/クリックが直接inputに届き、ネイティブのカレンダーが開く */
+.cal-wrap input[type=date]{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;padding:0;margin:0;cursor:pointer}
+#fatal{color:#b91c1c;white-space:pre-wrap;font-size:.875rem}
+/* --- 盤面（T7）。1セル=10分・1時間=6セル --- */
+:root{--cell-w:8px;--label-w:132px;--row-h:44px}
+#screen-app.active{display:flex;flex-direction:column;height:100dvh}
+.app-header{flex:none}
+#board{flex:1;min-height:0;padding:0}
+#board-scroll{height:100%;overflow:auto;overscroll-behavior:none}
+.grid{display:grid;grid-template-columns:var(--label-w) repeat(144,var(--cell-w));position:relative;width:max-content;background:#fff}
+.corner{position:sticky;top:0;left:0;z-index:30;background:#f9fafb;border-right:1px solid #d1d5db;border-bottom:1px solid #d1d5db}
+.hourcell{position:sticky;top:0;z-index:20;grid-column:span 6;background:#f9fafb;border-bottom:1px solid #d1d5db;border-left:1px solid #cbd5e1;font-size:1rem;color:#374151;padding:4px 0 4px 3px;overflow:hidden}
+.group-head{grid-column:1/-1;background:#e8edf4;border-bottom:1px solid #d1d5db;min-height:32px}
+.group-head-text{position:sticky;left:0;display:inline-block;padding:5px 8px;font-weight:600;font-size:1rem}
+.row-label{position:sticky;left:0;z-index:10;background:#fff;border-right:1px solid #d1d5db;border-bottom:1px solid #eceef1;min-height:var(--row-h);line-height:var(--row-h);padding:0 8px;font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-label.inactive{color:#9ca3af;background:#f3f4f6}
+.lane{grid-column:2/-1;position:relative;min-height:var(--row-h);border-bottom:1px solid #eceef1;background-image:repeating-linear-gradient(to right,#d5dae1 0 1px,transparent 1px calc(var(--cell-w)*6)),repeating-linear-gradient(to right,#eef0f3 0 1px,transparent 1px calc(var(--cell-w)*3))}
+.lane.inactive{background-color:#f3f4f6}
+.bar{position:absolute;top:4px;bottom:4px;border:1.5px solid;border-radius:6px;padding:0 4px;font-size:1rem;display:flex;align-items:center;white-space:nowrap;overflow:hidden;box-sizing:border-box}
+.bar.overlap{border:2px solid #dc2626;background-image:repeating-linear-gradient(45deg,rgba(220,38,38,.28) 0 6px,transparent 6px 12px)}
+.now-line{position:absolute;top:0;bottom:0;width:2px;background:#dc2626;z-index:15;pointer-events:none}
+.board-empty{grid-column:1/-1;padding:24px;color:#6b7280;font-size:1rem}
+.board-empty-text{position:sticky;left:0;display:inline-block}
+/* PCドラッグ作成の選択レイヤー（ここだけ touch-action:none／盤面本体は pan-x pan-y を維持） */
+.drag-sel{position:absolute;top:4px;bottom:4px;background:rgba(29,78,216,.16);border:1.5px dashed #1d4ed8;border-radius:6px;pointer-events:none;touch-action:none;z-index:12}
+.lane{cursor:crosshair;touch-action:pan-x pan-y pinch-zoom} /* スマホのスクロール/ズームは殺さない（spec §9） */
+.lane.inactive{cursor:default}
+/* --- 予約フォーム（T9・下からせり上がるボトムシート／PCは中央） --- */
+.form-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center;z-index:100}
+.form-overlay[hidden]{display:none}
+.res-form{background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:16px 16px 24px;max-height:92dvh;overflow:auto;box-shadow:0 -4px 20px rgba(0,0,0,.15)}
+.res-form h2{font-size:1.1rem;margin:0 0 8px}
+.res-form label{display:block;margin:10px 0 4px;font-size:.95rem;font-weight:600}
+.res-form select,.res-form textarea{width:100%;min-height:44px;font-size:1rem;padding:8px 12px;border:1px solid #9ca3af;border-radius:8px;background:#fff;color:#1f2937}
+.res-form textarea{min-height:56px;resize:vertical;font-family:inherit}
+.time-row{display:flex;gap:12px}
+.time-row label{flex:1}
+.warn{color:#b91c1c;font-size:.85rem;margin:4px 0 2px}
+.recent-chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
+.recent-chips:empty{display:none}
+.chip{background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;min-height:36px;padding:4px 12px;font-size:.9rem;border-radius:18px}
+.color-preview{display:inline-flex;align-items:center;gap:8px;margin-top:8px;font-size:.9rem;color:#6b7280}
+.color-swatch{width:22px;height:22px;border:1.5px solid;border-radius:6px}
+.form-actions{display:flex;gap:12px;margin-top:18px}
+.form-actions button{flex:1}
+.btn-cancel{background:#fff;border:1px solid #9ca3af;color:#374151}
+@media(min-width:640px){.form-overlay{align-items:center}.res-form{border-radius:16px}}
+/* --- 予約の編集・削除・Undo・オフライン（T10） --- */
+.bar{cursor:pointer}
+.updated-info{margin:2px 0 0;font-size:.85rem;color:#6b7280}
+.btn-danger{display:block;width:100%;margin-top:14px;min-height:44px;background:#fff;border:1px solid #dc2626;color:#b91c1c;border-radius:8px;font-size:1rem}
+.offline-note{margin:0;padding:8px 12px;background:#fef3c7;color:#92400e;font-size:.9rem;text-align:center}
+/* 購読エラーの赤帯（2026-10-14 レビュー②）：止まった盤面を「全部空き」と誤読させない */
+.sync-note{margin:0;padding:6px 12px;background:#fee2e2;color:#7f1d1d;font-size:.9rem;text-align:center;line-height:1.6}
+.sync-note button{margin-left:10px;background:#fff;border:1px solid #b91c1c;color:#7f1d1d;font-weight:700}
+#board.stale{opacity:.55;filter:grayscale(.6)}
+.undo-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);display:flex;align-items:center;gap:14px;background:#1f2937;color:#f9fafb;padding:12px 16px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.3);z-index:120;max-width:92vw}
+.undo-toast[hidden]{display:none}
+.undo-toast button{background:none;border:none;color:#93c5fd;font-size:1rem;font-weight:700;min-height:44px;padding:0 8px;white-space:nowrap}
+/* --- 管理画面（T11） --- */
+.admin-panel{max-width:560px}
+.admin-list{margin:8px 0 4px}
+.admin-group-head{font-weight:700;margin:12px 0 2px;color:#374151;font-size:.95rem}
+.admin-row{display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid #e5e7eb}
+.admin-row .a-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.95rem}
+.admin-row.inactive .a-name{color:#9ca3af}
+.a-btn{min-height:40px;min-width:40px;padding:4px 8px;font-size:.85rem;background:#fff;border:1px solid #9ca3af;border-radius:8px;color:#374151;white-space:nowrap}
+.a-btn:disabled{opacity:.4}
+.admin-add{display:flex;gap:6px;align-items:center;margin-top:4px}
+.admin-add input{flex:1;min-width:0}
+.admin-add .btn-primary{width:auto;flex:none} /* 全幅のボタンが名前欄を押しつぶしていた（2026-10-14） */
+.admin-add select{width:auto;min-width:96px}
+.admin-bulk{margin-top:12px;border-top:1px solid #e5e7eb;padding-top:4px}
+.admin-bulk summary{min-height:44px;line-height:44px;cursor:pointer;font-weight:600;font-size:.95rem}
+.admin-bulk textarea{min-height:120px}
+/* --- 初回だけ出す使い方カード（T12・spec §7.7） --- */
+.guide-list{margin:8px 0 4px;padding-left:1.2em}
+.guide-list li{margin:12px 0;line-height:1.6}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 3-state画面（spec §7.7）：loading / pass / app -->
+  <div id="screen-loading" class="screen active">
+    <div class="center-box"><div class="card">
+      <h1>配車ボード</h1>
+      <p id="loading-msg">読み込み中…</p>
+      <p id="fatal" hidden></p>
+    </div></div>
+  </div>
+  <div id="screen-pass" class="screen">
+    <div class="center-box"><div class="card">
+      <h1>配車ボード — 合言葉の入力</h1>
+      <p>ふだん使う方は<strong>共有リンク</strong>から開いてください（合言葉の入力は不要です）。<br>初回セットアップの方だけ、社の合言葉を入力してください。</p>
+      <input id="pass-input" type="text" autocomplete="off" placeholder="合言葉（12文字以上）" aria-label="合言葉">
+      <p class="note">施設名・地名・部署名など、当てやすい言葉は避けてください。</p>
+      <p id="pass-hint" class="pass-hint"></p>
+      <button id="pass-btn" class="btn-primary" disabled>リンクを発行して開く</button>
+      <p class="note">発行後、アドレスバーのURLがそのまま共有リンクになります（URLに合言葉の生値は含まれません）。</p>
+    </div></div>
+  </div>
+  <div id="screen-app" class="screen">
+    <header class="app-header">
+      <h1>配車ボード</h1>
+      <nav class="date-nav" aria-label="日付の切り替え">
+        <button id="nav-prev" class="nav-btn" type="button" aria-label="前の日">‹</button>
+        <span id="nav-date" aria-live="polite"></span>
+        <button id="nav-next" class="nav-btn" type="button" aria-label="次の日">›</button>
+        <button id="nav-today" class="nav-btn" type="button">今日</button>
+        <span class="cal-wrap">
+          <button id="nav-cal" class="nav-btn" type="button" aria-label="カレンダーから日付を選ぶ">📅</button>
+          <input id="nav-date-input" type="date" aria-label="日付を選択" tabindex="-1">
+        </span>
+        <button id="nav-admin" class="nav-btn" type="button" aria-label="管理画面">⚙</button>
+      </nav>
+    </header>
+    <p id="offline-note" class="offline-note" hidden>📴 オフライン中は閲覧のみです。電波が戻ると操作できます</p>
+    <p id="sync-note" class="sync-note" role="alert" hidden><span id="sync-msg"></span><button id="sync-reload" type="button">再読み込み</button></p>
+    <main id="board"></main>
+  </div>
+  <!-- 予約フォーム（T9）：PCドラッグ / スマホtap のどちらからも openCreateForm で開く -->
+  <div id="form-overlay" class="form-overlay" hidden>
+    <form id="res-form" class="res-form" role="dialog" aria-modal="true" aria-labelledby="form-title" autocomplete="off">
+      <h2 id="form-title">予約を追加</h2>
+      <p id="f-updated" class="updated-info" hidden></p>
+      <label for="f-item">利用するもの</label>
+      <select id="f-item"></select>
+      <label for="f-date">日付</label>
+      <input id="f-date" type="date">
+      <div class="time-row">
+        <div><label for="f-start">開始</label><select id="f-start"></select></div>
+        <div><label for="f-end">終了</label><select id="f-end"></select></div>
+      </div>
+      <label for="f-name">名前</label>
+      <input id="f-name" type="text" inputmode="text" maxlength="60" placeholder="予約する人のお名前">
+      <div id="f-recent" class="recent-chips" aria-label="よく使う名前"></div>
+      <span class="color-preview">バーの色： <span id="f-swatch" class="color-swatch"></span></span>
+      <label for="f-purpose">用件（任意・盤面のバーに表示されます）</label>
+      <input id="f-purpose" type="text" maxlength="60" placeholder="例：会議、送迎 など">
+      <label for="f-memo">メモ（任意）</label>
+      <textarea id="f-memo" maxlength="200" rows="2"></textarea>
+      <p class="warn">⚠️ 利用者の氏名は書かないでください</p>
+      <div class="form-actions">
+        <button id="f-cancel" type="button" class="btn-cancel">やめる</button>
+        <button id="f-save" type="submit" class="btn-primary">登録する</button>
+      </div>
+      <button id="f-delete" type="button" class="btn-danger" hidden>この予約を削除する</button>
+    </form>
+  </div>
+  <!-- Undoトースト（T10）：削除/変更の直後に「元に戻す」を提示 -->
+  <div id="undo-toast" class="undo-toast" hidden>
+    <span id="undo-msg"></span>
+    <button id="undo-btn" type="button">元に戻す</button>
+  </div>
+  <!-- 管理パス入力（T11）：⚙から。成功で管理画面へ -->
+  <div id="adminpass-overlay" class="form-overlay" hidden>
+    <form id="adminpass-form" class="res-form" role="dialog" aria-modal="true" aria-labelledby="adminpass-title" autocomplete="off">
+      <h2 id="adminpass-title">管理パスの入力</h2>
+      <p class="note">車リストの編集は管理者だけができます。</p>
+      <input id="ap-input" type="text" autocomplete="off" aria-label="管理パス" placeholder="管理パス">
+      <div class="form-actions">
+        <button id="ap-cancel" type="button" class="btn-cancel">やめる</button>
+        <button id="ap-open" type="submit" class="btn-primary">開く</button>
+      </div>
+    </form>
+  </div>
+  <!-- 管理画面（T11）：items の追加・改名・並べ替え・グループ変更・停止/再開（物理削除なし） -->
+  <div id="admin-overlay" class="form-overlay" hidden>
+    <div class="res-form admin-panel" role="dialog" aria-modal="true" aria-labelledby="admin-title">
+      <h2 id="admin-title">管理画面（車リストの編集）</h2>
+      <p class="warn">「削除」はありません。使わなくなった車は「停止」にします（過去の予約を守るため）</p>
+      <div id="admin-list" class="admin-list"></div>
+      <label for="a-name">アイテムを追加</label>
+      <div class="admin-add">
+        <input id="a-name" type="text" maxlength="60" placeholder="名前（例：12号車）">
+        <select id="a-group" aria-label="グループ">
+          <option value="car">🚗 車</option>
+          <option value="other">その他</option>
+        </select>
+        <button id="a-add" type="button" class="btn-primary">追加</button>
+      </div>
+      <details id="a-bulk-box" class="admin-bulk">
+        <summary>まとめて追加（1行に1つ）</summary>
+        <textarea id="a-bulk" rows="6" aria-label="まとめて追加する名前（1行に1つ）" placeholder="1号車&#10;2号車&#10;3号車"></textarea>
+        <div class="admin-add">
+          <select id="a-bulk-group" aria-label="まとめて追加するグループ">
+            <option value="car">🚗 車</option>
+            <option value="other">その他</option>
+          </select>
+          <button id="a-bulk-add" type="button" class="btn-primary">まとめて追加</button>
+        </div>
+        <p class="note">登録済みの名前は自動で飛ばします（一度に25件まで）</p>
+      </details>
+      <div class="form-actions">
+        <button id="a-close" type="button" class="btn-cancel">閉じる</button>
+      </div>
+    </div>
+  </div>
+  <!-- 初回だけ表示する使い方カード（T12・spec §7.7）：閉じると既読フラグを立て以後出さない -->
+  <div id="guide-overlay" class="form-overlay" hidden>
+    <div class="res-form guide-card" role="dialog" aria-modal="true" aria-labelledby="guide-title">
+      <h2 id="guide-title">配車ボードの使い方</h2>
+      <ol class="guide-list">
+        <li><b>盤面の見方</b><br>横方向が時間の帯（その日1日ぶん）です。行が車や区分、色つきのバーが予約を表します。</li>
+        <li><b>予約の入れ方</b><br>パソコンは、あけたい時間帯を<b>ドラッグ</b>します。スマホは、あいているマスを<b>タップ</b>すると入力フォームが開きます。</li>
+        <li><b>「用件」と「メモ」の使い分け</b><br><b>用件</b>は短いひとこと（例：会議、送迎）。盤面のバーに「名前（用件）」の形で表示されます。<b>メモ</b>は詳しい補足で、フォームの中だけに残ります。<br><span class="warn">⚠️ 利用者の氏名など個人情報は書かないでください。</span></li>
+      </ol>
+      <div class="form-actions">
+        <button id="guide-close" type="button" class="btn-primary">はじめる</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+/* CONFIG:START */
+// firebaseConfig（clientConfig）は公開してよい値（spec §3）。2026-07-11 オーナーのプロジェクトから取得
+var FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAefG1g3ECUeIqnbu7bu-f5Dt2YJZtPQAM",
+  authDomain: "haisha-board.firebaseapp.com",
+  projectId: "haisha-board",
+  storageBucket: "haisha-board.firebasestorage.app",
+  messagingSenderId: "1076741562343",
+  appId: "1:1076741562343:web:98678c1980a8722e452742"
+};
+var RECAPTCHA_SITE_KEY = "6LemIE4tAAAAABUEG0nDeNLWxX_QLoQYGDV-AinM"; // reCAPTCHA v3 サイトキー（公開OK・2026-07-11取得）
+/* CONFIG:END */
+/* LIB:START */
+function toMinutes(hhmm){
+  var p = String(hhmm).split(':');
+  return (parseInt(p[0],10)*60) + parseInt(p[1],10);
+}
+function toHHMM(min){
+  var h = Math.floor(min/60), m = min%60;
+  return (h<10?'0':'')+h + ':' + (m<10?'0':'')+m;
+}
+function snap10(min){ return Math.round(min/10)*10; }
+function overlaps(a, b){ return a.start < b.end && b.start < a.end; }
+function dateKeyOf(d){ return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' }); }
+function addDays(dateKey, n){
+  var p = dateKey.split('-');
+  var t = Date.UTC(+p[0], +p[1]-1, +p[2]) + n*86400000;
+  return new Date(t).toISOString().slice(0,10);
+}
+function expireAtOf(dateKey){
+  // 対象日+50日の JST 0:00（UTCでは前日15:00）。UTC 0:00 のままだと JST 9:00 期限になり sweep とズレる
+  var p = dateKey.split('-');
+  return Date.UTC(+p[0], +p[1]-1, +p[2]) + 50*86400000 - 9*3600000;
+}
+function isToday(dateKey, now){ return dateKey === dateKeyOf(now); }
+async function _sha256hex(str){
+  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(function(b){
+    return b.toString(16).padStart(2,'0'); }).join('');
+}
+async function roomIdFromPass(pass){ return _sha256hex(pass); }
+async function adminProofOf(roomId, pass){ return _sha256hex(roomId + ':' + pass); }
+/* 合言葉の強度チェック（spec §5-6・案1）。
+   HARD＝弱すぎる汎用語は弾く／SOFT＝推測されやすい語は注意だけで通す。
+   公開ファイルなので施設名などの語は持たない（画面の注意書きで一般的に案内する・2026-10-14） */
+var PASS_HARD_BANNED = ['password','pass','aikotoba','合言葉','あいことば','123456'];
+var PASS_SOFT_WARN = ['haisha','配車','はいしゃ'];
+function passProblem(t){
+  t = String(t);
+  if (t.length < 12) return 'あと' + (12 - t.length) + '文字必要です（12文字以上）';
+  var low = t.toLowerCase();
+  for (var i=0;i<PASS_HARD_BANNED.length;i++){
+    if (low.indexOf(PASS_HARD_BANNED[i]) !== -1) return '推測されやすい言葉「' + PASS_HARD_BANNED[i] + '」は使えません';
+  }
+  if (/^(.)\1+$/.test(t)) return '同じ文字の繰り返しは使えません';
+  return '';
+}
+function passWarning(t){
+  var low = String(t).toLowerCase();
+  for (var i=0;i<PASS_SOFT_WARN.length;i++){
+    if (low.indexOf(PASS_SOFT_WARN[i]) !== -1) return '「' + PASS_SOFT_WARN[i] + '」は推測されやすい言葉です（このまま発行できますが、他の言葉も混ぜると安心です）';
+  }
+  return '';
+}
+function colorForName(name){
+  var palette = ['blue','teal','green','orange','red','purple','pink','gray',
+    'indigo','amber','brown','cyan'];
+  var h = 0, s = String(name).trim(); // 前後空白で同一人物の色が変わらないよう trim 後で計算
+  for (var i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) >>> 0; }
+  return palette[h % palette.length];
+}
+/* ドラッグ作成用（T9）：レーン内px→0時からの分（10分吸着＋0..1440クランプ）。1セル=cellW px=10分 */
+function pxToMin(px, cellW){
+  var m = snap10(px / cellW * 10);
+  if (m < 0) m = 0;
+  if (m > 1440) m = 1440;
+  return m;
+}
+/* 2点(px由来の分)→予約レンジ。逆ドラッグ吸収・最低10分幅・0..1440クランプ */
+function normalizeRange(a, b){
+  var start = Math.min(a, b), end = Math.max(a, b);
+  if (start < 0) start = 0;
+  if (end > 1440) end = 1440;
+  if (end - start < 10){
+    end = start + 10;
+    if (end > 1440){ end = 1440; start = end - 10; }
+  }
+  return { start: start, end: end };
+}
+/* 重なり確認（T9・§7.5）：同一アイテムで時間交差する予約。自分自身(id一致)は除外（編集T10でも流用） */
+function findClashes(list, o){
+  return (list || []).filter(function(r){
+    return r.id !== o.id && r.itemId === o.itemId && overlaps(r, o);
+  });
+}
+/* アイテムの表示順（spec §7.8）：car上・other下、グループ内はorder昇順。元配列は変更しない */
+function sortItems(items){
+  return (items || []).slice().sort(function(a, b){
+    if (a.group !== b.group) return a.group === 'car' ? -1 : 1;
+    return (a.order || 0) - (b.order || 0);
+  });
+}
+/* 管理画面（T11）：グループ末尾に追加するときの order（最大値+10・初項10） */
+function nextOrderOf(items, group){
+  var max = 0;
+  (items || []).forEach(function(it){
+    if (it.group === group && (it.order || 0) > max) max = it.order || 0;
+  });
+  return max + 10;
+}
+/* 管理画面（T11）：id を dir(-1=上/+1=下) の隣と入れ替えた後の同一グループ連番(10,20,…)を計算し、
+   order が変わる行だけ {id, order} で返す。端・グループ跨ぎ・不明idは null（動かせない） */
+function reorderPlan(items, id, dir){
+  var target = null;
+  (items || []).forEach(function(it){ if (it.id === id) target = it; });
+  if (!target) return null;
+  var rows = sortItems(items).filter(function(it){ return it.group === target.group; });
+  var i = -1;
+  for (var k = 0; k < rows.length; k++){ if (rows[k].id === id) i = k; }
+  var j = i + dir;
+  if (j < 0 || j >= rows.length) return null;
+  var tmp = rows[i]; rows[i] = rows[j]; rows[j] = tmp;
+  var out = [];
+  rows.forEach(function(it, n){
+    var want = (n + 1) * 10;
+    if ((it.order || 0) !== want) out.push({ id: it.id, order: want });
+  });
+  return out.length ? out : null;
+}
+/* 管理画面「まとめて追加」（2026-10-14・初期一覧の内蔵をやめた代わり。公開ファイルに実データを置かない）。
+   1行に1つ。空行・前後空白を除き、登録済みの名前（停止中を含む）と入力内の重複は飛ばす。60文字で切る。
+   order はグループ末尾から +10 ずつ。戻り値 { rows:[{name,group,order,active}], skipped:[飛ばした名前] } */
+function bulkItemRows(text, group, items){
+  var g = (group === 'other') ? 'other' : 'car';
+  var have = Object.create(null); // 「constructor」等の名前を登録済みと誤判定しない
+  (items || []).forEach(function(it){ have[String(it.name).trim()] = true; });
+  var order = nextOrderOf(items, g) - 10;
+  var rows = [], skipped = [];
+  String(text || '').split(/\r?\n/).forEach(function(line){
+    var n = Array.from(line.trim()).slice(0, 60).join(''); // 文字単位で切る（絵文字を割らない＝rules の size() と同じ数え方）
+    if (!n) return;
+    if (have[n]){ skipped.push(n); return; }
+    have[n] = true;
+    order += 10;
+    rows.push({ name: n, group: g, order: order, active: true });
+  });
+  return { rows: rows, skipped: skipped };
+}
+/* 編集フォームの「最終更新：〇〇さん（日時）」表示（T10・spec §7.4）。時刻はJST */
+function updatedLabelOf(name, ms){
+  if (!name || !ms) return '';
+  var s = new Date(ms).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo',
+    month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return '最終更新：' + name + 'さん（' + s + '）';
+}
+/* 日付またぎ（2026-10-14 レビュー①）：最後に日付を動かした時点で「今日」を見ていた人だけ、
+   日付が変わったら新しい今日へ移す。lastToday＝基準の今日／viewing＝表示中／nowToday＝いまの今日。移す先 or null */
+function rolloverTarget(lastToday, viewing, nowToday){
+  if (!lastToday || !viewing || !nowToday) return null;
+  if (nowToday === lastToday) return null;
+  return viewing === lastToday ? nowToday : null;
+}
+/* 購読エラー（2026-10-14 レビュー②）の赤帯の文言。無料枠の使い切りだけは「夕方に戻る」を添える
+   （Spark の上限は太平洋時間0時＝日本の16〜17時に戻る） */
+function syncErrorMessage(code){
+  var base = '⚠️ 最新の予約を読み込めていません。予約の追加・変更は止めています。';
+  if (code === 'resource-exhausted') return base + '本日の利用上限に達した可能性があります。夕方ごろに上限が戻ったら、再読み込みしてください。';
+  return base + '再読み込みしてください。';
+}
+function validateReservation(o){
+  var palette = ['blue','teal','green','orange','red','purple','pink','gray',
+    'indigo','amber','brown','cyan'];
+  function fail(e){ return {ok:false, error:e}; }
+  if (!o || typeof o!=='object') return fail('no object');
+  if (typeof o.itemId!=='string' || !o.itemId) return fail('itemId');
+  if (typeof o.date!=='string' || !/^\d{4}-\d{2}-\d{2}$/.test(o.date)) return fail('date');
+  var dp = o.date.split('-'), dt = new Date(Date.UTC(+dp[0], +dp[1]-1, +dp[2]));
+  if (dt.getUTCFullYear()!==+dp[0] || dt.getUTCMonth()!==+dp[1]-1 || dt.getUTCDate()!==+dp[2]) return fail('date'); // 実在しない日付（2026-02-30 等）
+  if (!Number.isInteger(o.start) || !Number.isInteger(o.end)) return fail('int');
+  if (o.start%10!==0 || o.end%10!==0) return fail('step10');
+  if (!(0<=o.start && o.start<o.end && o.end<=1440)) return fail('range');
+  if (typeof o.name!=='string' || o.name.trim().length<1 || o.name.length>60) return fail('name');
+  if (typeof o.purpose!=='string' || o.purpose.length>60) return fail('purpose');
+  if (typeof o.memo!=='string' || o.memo.length>200) return fail('memo');
+  if (palette.indexOf(o.color)===-1) return fail('color');
+  return {ok:true};
+}
+/* LIB:END */
+</script>
+<script>
+/* ===== APP（T6：Firebase初期化＋匿名認証＋3-state＋ルーム解決） ===== */
+(function(){
+'use strict';
+window.currentUser = null; window.roomId = null; window.db = null;
+
+/* --- 端末記憶（localStorageはtry/catch必須） --- */
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+window.lsGet = lsGet; window.lsSet = lsSet;
+
+/* --- 操作者名ゲート（spec v1.4 §7.3）。T9〜T11の全書き込み前に必ず通す --- */
+function requireOperatorName(){
+  var n = (lsGet('haisha_myName')||'').trim();
+  if (!n){
+    n = (window.prompt('操作した人のお名前を入力してください（変更履歴に表示されます）','')||'').trim().slice(0,60);
+    if (!n) return null;
+    lsSet('haisha_myName', n);
+  }
+  return n;
+}
+window.requireOperatorName = requireOperatorName;
+
+/* --- 3-state画面切替 --- */
+function showScreen(name){
+  ['loading','pass','app'].forEach(function(s){
+    document.getElementById('screen-'+s).classList.toggle('active', s===name);
+  });
+}
+window.showScreen = showScreen;
+
+function showFatal(e){
+  console.error(e);
+  showScreen('loading');
+  document.getElementById('loading-msg').textContent = '読み込みに失敗しました。通信状態を確認して、ページを再読み込みしてください。';
+  var el = document.getElementById('fatal');
+  el.hidden = false;
+  el.textContent = String((e && e.message) || e);
+}
+
+/* 合言葉チェック（passProblem / passWarning）は LIB ブロックへ移設（テスト対象・案1で2リストに分割） */
+
+/* ===== 盤面（T7：横ガント描画＋当日購読） ===== */
+var currentDate = null, itemsCache = [], resCache = [];
+var _unsub = null, _unsubItems = null, _nowTimer = null;
+var _barEls = {};      // resId -> バー要素
+var _laneEls = {};     // itemId -> レーン要素
+var _rowKey = '';      // 現在スケルトンにある行の並び（差分判定用）
+window._dndActive = false; window._pendingSnapshot = null; window._pendingItemsSnapshot = null; // ドラッグ中はsnapshotを保持し捨てない（追補8＋台帳#6：items側にも同ガード）
+
+function _cellW(){ return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell-w')) || 8; }
+function _labelW(){ return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--label-w')) || 132; }
+
+/* sortItems は LIB（T11で管理画面と共用のため移設） */
+/* active:false の行は非表示。ただしその日に予約が残る場合のみ「（停止中）」表示（spec §6） */
+function visibleRows(items, reservations){
+  var hasRes = {};
+  reservations.forEach(function(r){ hasRes[r.itemId] = true; });
+  return sortItems(items).filter(function(it){ return it.active !== false || hasRes[it.id]; });
+}
+function _rowKeyOf(items, reservations){
+  return visibleRows(items, reservations).map(function(it){ return it.id; }).join('|');
+}
+
+function renderBoard(items, reservations){
+  var board = document.getElementById('board');
+  var prev = document.getElementById('board-scroll');
+  var keepX = prev ? prev.scrollLeft : null, keepY = prev ? prev.scrollTop : 0;
+  board.textContent = '';
+  _barEls = {}; _laneEls = {};
+  var scroll = document.createElement('div'); scroll.id = 'board-scroll';
+  var grid = document.createElement('div'); grid.className = 'grid'; grid.id = 'grid';
+  var corner = document.createElement('div'); corner.className = 'corner'; grid.appendChild(corner);
+  for (var h = 0; h < 24; h++){
+    var hc = document.createElement('div'); hc.className = 'hourcell'; hc.textContent = h; grid.appendChild(hc);
+  }
+  var rows = visibleRows(items, reservations);
+  _rowKey = rows.map(function(it){ return it.id; }).join('|');
+  if (rows.length === 0){
+    var em = document.createElement('div'); em.className = 'board-empty';
+    var emt = document.createElement('span'); emt.className = 'board-empty-text';
+    emt.textContent = 'アイテムが未登録です（管理画面から登録します）';
+    em.appendChild(emt); grid.appendChild(em);
+  }
+  var lastGroup = null;
+  rows.forEach(function(it){
+    if (it.group !== lastGroup){
+      lastGroup = it.group;
+      var gh = document.createElement('div'); gh.className = 'group-head';
+      var ght = document.createElement('span'); ght.className = 'group-head-text';
+      ght.textContent = (it.group === 'car') ? '🚗 車' : 'その他';
+      gh.appendChild(ght); grid.appendChild(gh);
+    }
+    var inactive = (it.active === false);
+    var lb = document.createElement('div');
+    lb.className = 'row-label' + (inactive ? ' inactive' : '');
+    lb.textContent = it.name + (inactive ? '（停止中）' : '');
+    lb.title = lb.textContent;
+    var lane = document.createElement('div');
+    lane.className = 'lane' + (inactive ? ' inactive' : '');
+    lane.dataset.item = it.id;
+    grid.appendChild(lb); grid.appendChild(lane);
+    _laneEls[it.id] = lane;
+  });
+  var line = document.createElement('div'); line.className = 'now-line'; line.id = 'now-line';
+  line.style.display = 'none'; grid.appendChild(line);
+  scroll.appendChild(grid); board.appendChild(scroll);
+  reservations.forEach(function(r){ upsertBar(r); });
+  refreshOverlaps();
+  updateNowLine();
+  if (keepX !== null){ scroll.scrollLeft = keepX; scroll.scrollTop = keepY; }
+}
+
+function upsertBar(r){
+  var lane = _laneEls[r.itemId];
+  if (!lane) return; // 行がない（未登録itemIdの孤児予約）は描かない
+  var el = _barEls[r.id];
+  if (!el){ el = document.createElement('div'); _barEls[r.id] = el; }
+  if (el.parentNode !== lane) lane.appendChild(el);
+  var cw = _cellW();
+  el.style.left = (r.start/10*cw) + 'px';
+  el.style.width = ((r.end - r.start)/10*cw) + 'px';
+  el.className = 'bar c-' + r.color;
+  var text = r.name + (r.purpose ? '（' + r.purpose + '）' : ''); // バー＝名前（用件）合成（spec §7.1）
+  el.textContent = text;
+  el.title = text + ' ' + toHHMM(r.start) + '〜' + toHHMM(r.end);
+  el.dataset.id = r.id; el.dataset.item = r.itemId;
+}
+
+/* 重なり（同一item・時間交差）は赤縁＋斜線で常時可視化（spec §7.1） */
+function refreshOverlaps(){
+  var byItem = {};
+  resCache.forEach(function(r){ (byItem[r.itemId] = byItem[r.itemId] || []).push(r); });
+  resCache.forEach(function(r){
+    var el = _barEls[r.id]; if (!el) return;
+    var list = byItem[r.itemId], hit = false;
+    for (var i = 0; i < list.length; i++){
+      if (list[i].id !== r.id && overlaps(r, list[i])){ hit = true; break; }
+    }
+    el.classList.toggle('overlap', hit);
+  });
+}
+
+/* 現在時刻の赤縦線（今日のみ・表示のみなので毎回Dateから再計算） */
+function updateNowLine(){
+  var line = document.getElementById('now-line'); if (!line) return;
+  var now = new Date();
+  if (!currentDate || !isToday(currentDate, now)){ line.style.display = 'none'; return; }
+  var mins = now.getHours()*60 + now.getMinutes();
+  line.style.left = (_labelW() + mins/10*_cellW()) + 'px';
+  line.style.display = 'block';
+}
+
+/* 初期スクロール：今日＝現在時刻が画面に入る位置（1時間前を左端）／他日＝6:00（spec §7.1） */
+function scrollToInitial(){
+  var sc = document.getElementById('board-scroll'); if (!sc) return;
+  var now = new Date();
+  var mins = isToday(currentDate, now) ? Math.max(0, now.getHours()*60 + now.getMinutes() - 60) : 360;
+  sc.scrollLeft = mins/10*_cellW();
+  sc.scrollTop = 0;
+}
+
+function applySnap(snap){
+  resCache = snap.docs.map(function(d){ var o = d.data(); o.id = d.id; return o; });
+  if (_rowKeyOf(itemsCache, resCache) !== _rowKey){ // 行構成が変わる（停止中行の出現/消滅等）→全再構築
+    renderBoard(itemsCache, resCache);
+    return;
+  }
+  snap.docChanges().forEach(function(ch){ // 差分更新（spec §8：変更のあったバーだけDOM更新）
+    var r = ch.doc.data(); r.id = ch.doc.id;
+    if (ch.type === 'removed'){
+      var el = _barEls[r.id];
+      if (el){ el.remove(); delete _barEls[r.id]; }
+    } else {
+      upsertBar(r);
+    }
+  });
+  refreshOverlaps();
+}
+
+function subscribeDay(dateKey){
+  var fs = window._fs, db = window.db, room = window.roomId;
+  if (_unsub){ _unsub(); _unsub = null; } // 前日分を必ず解除（読み課金対策・spec §10）
+  window._pendingSnapshot = null; // 前の日の保留snapshotを持ち越さない
+  currentDate = dateKey;
+  resCache = [];
+  renderBoard(itemsCache, resCache); // スケルトン即描画
+  scrollToInitial();
+  var resQ = fs.query(
+    fs.collection(db, 'rooms/' + room + '/reservations'),
+    fs.where('date', '==', dateKey));
+  _unsub = fs.onSnapshot(resQ, function(snap){
+    if (window._dndActive){ window._pendingSnapshot = snap; return; } // 捨てずに保持（追補8）
+    applySnap(snap);
+  }, function(err){ markSyncBroken('subscribeDay', err); }); // 無言で止めない（レビュー②）
+}
+/* items購読の反映（startAppと保留適用で共用・台帳#6） */
+function applyItemsSnap(snap){
+  itemsCache = snap.docs.map(function(d){ var o = d.data(); o.id = d.id; return o; });
+  renderBoard(itemsCache, resCache);
+  var ao = document.getElementById('admin-overlay'); // 管理画面を開いていれば一覧も追随（T11）
+  if (ao && !ao.hidden) renderAdminList();
+}
+/* T9のpointerup/pointercancelで必ず呼ぶ（追補8）。items→reservationsの順で反映
+   （itemsの再構築で盤面を作り直してから、予約の差分/再描画をかける） */
+window._applyPendingSnapshot = function(){
+  if (window._pendingItemsSnapshot){ var is = window._pendingItemsSnapshot; window._pendingItemsSnapshot = null; applyItemsSnap(is); }
+  if (window._pendingSnapshot){ var s = window._pendingSnapshot; window._pendingSnapshot = null; applySnap(s); }
+};
+/* 後続タスク（T8日付ナビ等）と検証用の公開 */
+window.subscribeDay = subscribeDay;
+window.renderBoard = renderBoard;
+window.getCurrentDate = function(){ return currentDate; };
+/* 開発検証用：スタブデータを流し込んで描画（本番動作には不使用） */
+window._injectTestData = function(items, reservations){
+  itemsCache = items; resCache = reservations;
+  renderBoard(itemsCache, resCache);
+};
+
+/* ===== 日付ナビ（T8）：goDate＝購読の張り替え＋ヘッダー更新 ===== */
+function _dateLabelOf(dateKey){
+  var p = dateKey.split('-');
+  var w = '日月火水木金土'.charAt(new Date(Date.UTC(+p[0], +p[1]-1, +p[2])).getUTCDay());
+  return (+p[1]) + '/' + (+p[2]) + '(' + w + ')';
+}
+function updateDateNav(){
+  if (!currentDate) return;
+  document.getElementById('nav-date').textContent = _dateLabelOf(currentDate);
+  document.getElementById('nav-date-input').value = currentDate;
+  // 今日を表示中は「今日」ボタンを無効化。日付が変わったら30秒タイマーで解除される
+  document.getElementById('nav-today').disabled = isToday(currentDate, new Date());
+}
+var _todayKey = null; // 基準の今日：最後に日付を動かした時点の実の今日（レビュー①）
+function goDate(dateKey){
+  _todayKey = dateKeyOf(new Date()); // 日付を動かすたびに取り直す（0時直後に別日へ移った直後、今日へ引き戻さないため）
+  subscribeDay(dateKey);
+  updateDateNav();
+}
+window.goDate = goDate;
+/* 入力・操作の途中か（このあいだは盤面の日付を勝手に動かさない） */
+function _uiBusy(){
+  return !_fmE.overlay.hidden || !_adminE.passOverlay.hidden || !_adminE.overlay.hidden ||
+    window._dndActive || _formBusy || _adminBusy;
+}
+/* 日付またぎ（レビュー①）：開いたまま0時を越えたら、今日を見ていた人だけ新しい今日へ移す。
+   30秒タイマーと、画面に戻ったとき（visibilitychange）に呼ぶ。入力中は保留して次の確認で移す */
+function checkDayRollover(){
+  if (!_appStarted) return;
+  var t = dateKeyOf(new Date());
+  var target = rolloverTarget(_todayKey, currentDate, t);
+  if (!target){ _todayKey = t; return; }
+  if (_uiBusy()) return;
+  goDate(target);
+  showInfoToast('日付が変わったので、今日（' + _dateLabelOf(target) + '）を表示しました');
+}
+window.checkDayRollover = checkDayRollover;
+document.addEventListener('visibilitychange', function(){
+  if (document.visibilityState !== 'visible' || !_appStarted) return;
+  checkDayRollover(); // バックグラウンドではタイマーが間引かれるため、戻った瞬間にも確認する
+  updateNowLine();
+  updateDateNav();
+});
+(function(){
+  var di = document.getElementById('nav-date-input');
+  document.getElementById('nav-prev').addEventListener('click', function(){
+    if (currentDate) goDate(addDays(currentDate, -1));
+  });
+  document.getElementById('nav-next').addEventListener('click', function(){
+    if (currentDate) goDate(addDays(currentDate, 1));
+  });
+  document.getElementById('nav-today').addEventListener('click', function(){
+    goDate(dateKeyOf(new Date()));
+  });
+  // PCはクリックだけではピッカーが開かないブラウザがあるため showPicker を明示呼び出し
+  di.addEventListener('click', function(){
+    if (typeof di.showPicker === 'function'){ try{ di.showPicker(); }catch(e){} }
+  });
+  di.addEventListener('change', function(){
+    if (/^\d{4}-\d{2}-\d{2}$/.test(di.value)) goDate(di.value); // クリア時の空文字は無視
+  });
+})();
+
+/* ===== 予約の作成（T9）：PC=ドラッグ／スマホ=空きセルtap → フォーム ===== */
+var _fmE = {
+  overlay: document.getElementById('form-overlay'),
+  form: document.getElementById('res-form'),
+  title: document.getElementById('form-title'),
+  updated: document.getElementById('f-updated'),
+  del: document.getElementById('f-delete'),
+  item: document.getElementById('f-item'),
+  date: document.getElementById('f-date'),
+  start: document.getElementById('f-start'),
+  end: document.getElementById('f-end'),
+  name: document.getElementById('f-name'),
+  recent: document.getElementById('f-recent'),
+  swatch: document.getElementById('f-swatch'),
+  purpose: document.getElementById('f-purpose'),
+  memo: document.getElementById('f-memo'),
+  save: document.getElementById('f-save'),
+  cancel: document.getElementById('f-cancel')
+};
+/* 10分刻みプルダウン（開始=0:00〜23:50・終了=0:10〜24:00）は一度だけ生成 */
+(function(){
+  for (var m = 0; m < 1440; m += 10) _fmE.start.add(new Option(toHHMM(m), m));
+  for (var m2 = 10; m2 <= 1440; m2 += 10) _fmE.end.add(new Option(toHHMM(m2), m2));
+})();
+
+/* 予約者名の端末記憶（操作者名 haisha_myName とは別物・spec §7.3） */
+function _recentNames(){
+  try { var a = JSON.parse(lsGet('haisha_recentNames') || '[]'); return Array.isArray(a) ? a : []; }
+  catch(e){ return []; }
+}
+function _pushRecentName(n){
+  var a = _recentNames().filter(function(x){ return x !== n; });
+  a.unshift(n);
+  lsSet('haisha_recentNames', JSON.stringify(a.slice(0, 6)));
+}
+function _updateSwatch(){
+  _fmE.swatch.className = 'color-swatch c-' + colorForName(_fmE.name.value);
+}
+function _renderRecentChips(){
+  _fmE.recent.textContent = '';
+  _recentNames().forEach(function(n){
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = n;
+    b.addEventListener('click', function(){ _fmE.name.value = n; _updateSwatch(); });
+    _fmE.recent.appendChild(b);
+  });
+}
+
+var _editing = null; // 編集中: { id, prev(元データのコピー) } ／ null=新規作成
+
+function openCreateForm(itemId, start, end){
+  var f = _fmE;
+  f.item.textContent = '';
+  sortItems(itemsCache).forEach(function(it){
+    if (it.active === false) return; // 停止中の行には新規予約を入れない
+    f.item.add(new Option(it.name, it.id));
+  });
+  if (!f.item.options.length){ alert('アイテムが未登録です（管理画面から登録してください）'); return; }
+  f.item.value = itemId;
+  if (f.item.selectedIndex < 0) f.item.selectedIndex = 0;
+  f.date.value = currentDate || dateKeyOf(new Date());
+  f.start.value = String(start);
+  f.end.value = String(end);
+  f.name.value = lsGet('haisha_resName') || '';
+  f.purpose.value = ''; f.memo.value = '';
+  _editing = null;
+  f.title.textContent = '予約を追加';
+  f.save.textContent = '登録する';
+  f.updated.hidden = true;
+  f.del.hidden = true;
+  _renderRecentChips();
+  _updateSwatch();
+  updateOfflineUI();
+  f.overlay.hidden = false;
+}
+window.openCreateForm = openCreateForm;
+
+/* 予約バーtap → 編集フォーム（作成と共用・spec §7.4） */
+function openEditForm(resId){
+  var r = null;
+  resCache.forEach(function(x){ if (x.id === resId) r = x; });
+  if (!r) return; // 直前に消された等
+  var f = _fmE;
+  f.item.textContent = '';
+  sortItems(itemsCache).forEach(function(it){
+    // 停止中の行は非表示。ただし現予約が載っている行だけは選択肢に残す
+    if (it.active === false && it.id !== r.itemId) return;
+    f.item.add(new Option(it.name + (it.active === false ? '（停止中）' : ''), it.id));
+  });
+  f.item.value = r.itemId;
+  f.date.value = r.date;
+  f.start.value = String(r.start);
+  f.end.value = String(r.end);
+  f.name.value = r.name;
+  f.purpose.value = r.purpose || '';
+  f.memo.value = r.memo || '';
+  _editing = { id: r.id, prev: Object.assign({}, r) };
+  f.title.textContent = '予約の変更';
+  f.save.textContent = '変更を保存';
+  // serverTimestamp反映前(ローカル書き込み直後)は updatedAt が null のことがある
+  var ms = (r.updatedAt && typeof r.updatedAt.toMillis === 'function') ? r.updatedAt.toMillis() : 0;
+  f.updated.textContent = updatedLabelOf(r.updatedByName, ms);
+  f.updated.hidden = !f.updated.textContent;
+  f.del.hidden = false;
+  _renderRecentChips();
+  _updateSwatch();
+  updateOfflineUI();
+  f.overlay.hidden = false;
+}
+window.openEditForm = openEditForm;
+
+function closeForm(){ _fmE.overlay.hidden = true; _editing = null; }
+
+/* 保存（T9・追補1のpayload契約）。戻り値 true=保存した / false=中断（フォームは開いたまま） */
+var _VMSG = {
+  name: '名前を入力してください（60文字まで）',
+  purpose: '用件は60文字までにしてください',
+  memo: 'メモは200文字までにしてください',
+  date: '日付が正しくありません',
+  range: '終了は開始より後の時刻にしてください',
+  step10: '時間は10分きざみで選んでください',
+  int: '時間の指定が正しくありません',
+  item: '利用するものを選んでください'
+};
+/* 入力検証＋重なり名指しconfirm（作成T9・編集T10共通）。true=進んでよい */
+async function _checkBeforeWrite(o){
+  if (!o.itemId){ alert(_VMSG.item); return false; }
+  var v = validateReservation(o);
+  if (!v.ok){ alert(_VMSG[v.error] || ('入力エラー: ' + v.error)); return false; }
+  var fs = window._fs, db = window.db, room = window.roomId;
+  /* 重なり確認はフォームのdate基準（追補2）：表示日と違えばその日の分を1回取得してから判定 */
+  var list = resCache;
+  if (o.date !== currentDate){
+    var gs = await fs.getDocs(fs.query(
+      fs.collection(db, 'rooms/' + room + '/reservations'),
+      fs.where('date', '==', o.date)));
+    list = gs.docs.map(function(d){ var r = d.data(); r.id = d.id; return r; });
+  }
+  var clash = findClashes(list, o); // 編集時は o.id で自分自身を除外
+  if (clash.length){
+    var itName = '';
+    itemsCache.forEach(function(it){ if (it.id === o.itemId) itName = it.name; });
+    if (!window.confirm('この時間は〈' + clash[0].name + '〉さんが〈' + itName +
+        '〉を予約済みです。それでも登録しますか？')) return false;
+  }
+  return true;
+}
+
+async function saveReservation(o, opName){
+  if (!(await _checkBeforeWrite(o))) return false;
+  var fs = window._fs, db = window.db, room = window.roomId;
+  await fs.addDoc(fs.collection(db, 'rooms/' + room + '/reservations'), {
+    itemId: o.itemId, date: o.date, start: o.start, end: o.end,
+    name: o.name, purpose: o.purpose, memo: o.memo, color: o.color,
+    createdBy: window.currentUser.uid, updatedBy: window.currentUser.uid,
+    updatedByName: opName,
+    createdAt: fs.serverTimestamp(), updatedAt: fs.serverTimestamp(),
+    expireAt: new Date(expireAtOf(o.date)) // 対象日+50日のJST 0:00（追補7）
+  });
+  return true;
+}
+window.saveReservation = saveReservation;
+
+/* 編集の保存（T10）：createdBy/createdAtは触らない。expireAtは日付変更に備え常に再計算して同送 */
+async function updateReservation(o, opName){
+  if (!(await _checkBeforeWrite(o))) return false;
+  var fs = window._fs, db = window.db, room = window.roomId;
+  await fs.updateDoc(fs.doc(db, 'rooms/' + room + '/reservations/' + o.id), {
+    itemId: o.itemId, date: o.date, start: o.start, end: o.end,
+    name: o.name, purpose: o.purpose, memo: o.memo, color: o.color,
+    updatedBy: window.currentUser.uid, updatedByName: opName,
+    updatedAt: fs.serverTimestamp(),
+    expireAt: new Date(expireAtOf(o.date))
+  });
+  return true;
+}
+window.updateReservation = updateReservation;
+
+async function deleteReservation(resId){
+  var fs = window._fs, db = window.db, room = window.roomId;
+  await fs.deleteDoc(fs.doc(db, 'rooms/' + room + '/reservations/' + resId));
+}
+window.deleteReservation = deleteReservation;
+
+/* 削除のUndo＝新規復元扱い（追補3）：createdBy等を現在の操作者に付け替えないとRulesに拒否される */
+function _restoreDeleted(prev, opName){
+  var fs = window._fs, db = window.db, room = window.roomId;
+  return fs.addDoc(fs.collection(db, 'rooms/' + room + '/reservations'), {
+    itemId: prev.itemId, date: prev.date, start: prev.start, end: prev.end,
+    name: prev.name, purpose: prev.purpose, memo: prev.memo, color: prev.color,
+    createdBy: window.currentUser.uid, updatedBy: window.currentUser.uid,
+    updatedByName: opName,
+    createdAt: fs.serverTimestamp(), updatedAt: fs.serverTimestamp(),
+    expireAt: new Date(expireAtOf(prev.date))
+  });
+}
+/* 変更のUndo＝元の内容でもう一度update（対象が消されていれば失敗→呼び出し側でalert） */
+function _restoreEdited(prev, opName){
+  var fs = window._fs, db = window.db, room = window.roomId;
+  return fs.updateDoc(fs.doc(db, 'rooms/' + room + '/reservations/' + prev.id), {
+    itemId: prev.itemId, date: prev.date, start: prev.start, end: prev.end,
+    name: prev.name, purpose: prev.purpose, memo: prev.memo, color: prev.color,
+    updatedBy: window.currentUser.uid, updatedByName: opName,
+    updatedAt: fs.serverTimestamp(),
+    expireAt: new Date(expireAtOf(prev.date))
+  });
+}
+
+/* ===== Undoトースト（T10）：直近1件のみ・10秒で自動で消える ===== */
+var _undoE = {
+  box: document.getElementById('undo-toast'),
+  msg: document.getElementById('undo-msg'),
+  btn: document.getElementById('undo-btn')
+};
+var _undoTimer = null, _undoAction = null;
+function showUndoToast(msg, action){
+  _undoAction = action; // function(opName) -> Promise
+  _undoE.msg.textContent = msg;
+  _undoE.btn.hidden = false;
+  _undoE.box.hidden = false;
+  if (_undoTimer) clearTimeout(_undoTimer);
+  _undoTimer = setTimeout(hideUndoToast, 10000);
+}
+/* お知らせだけのトースト（「元に戻す」ボタンなし）。元に戻せる操作の案内中は上書きしない */
+function showInfoToast(msg){
+  if (_undoAction) return;
+  _undoE.msg.textContent = msg;
+  _undoE.btn.hidden = true;
+  _undoE.box.hidden = false;
+  if (_undoTimer) clearTimeout(_undoTimer);
+  _undoTimer = setTimeout(hideUndoToast, 6000);
+}
+function hideUndoToast(){
+  _undoE.box.hidden = true;
+  _undoAction = null;
+  if (_undoTimer){ clearTimeout(_undoTimer); _undoTimer = null; }
+}
+window.showUndoToast = showUndoToast;
+_undoE.btn.addEventListener('click', async function(){
+  var act = _undoAction;
+  if (!act) return;
+  if (_alertIfBlocked()) return;
+  var opName = requireOperatorName(); // Undoも書き込み（追補5）
+  if (!opName){ alert('操作した人のお名前が入力されないと元に戻せません'); return; }
+  hideUndoToast();
+  try {
+    await act(opName);
+  } catch(err){
+    console.error('undo error:', err);
+    alert('元に戻せませんでした。予約表を確認してください。');
+  }
+});
+
+/* ===== オフライン／購読エラー＝閲覧のみ（T10・spec §11／2026-10-14 レビュー②）===== */
+var _formBusy = false; // 保存/削除の通信中（二重送信防止。online復帰イベントで解除されないように）
+var _syncBroken = false; // 購読がエラーで止まった（SDKは再開しないため、再読み込みまで戻さない）
+function _isOffline(){ return navigator.onLine === false; }
+/* 書き込みを止める判定はここ1か所（古い盤面での保存は重なり警告が信用できない＝オフラインと同じ理由） */
+function _writeBlocked(){ return _isOffline() || _syncBroken; }
+/* 書き込み前の共通ゲート：止まっていれば理由を出し分けて true */
+function _alertIfBlocked(){
+  if (_isOffline()){ alert('オフライン中は閲覧のみです。電波が戻ってからお試しください'); return true; }
+  if (_syncBroken){ alert('最新の予約を読み込めていないため、操作できません。画面上の「再読み込み」を押してください'); return true; }
+  return false;
+}
+function updateOfflineUI(){
+  document.getElementById('offline-note').hidden = !_isOffline();
+  _fmE.save.disabled = _writeBlocked() || _formBusy;
+  _fmE.del.disabled = _writeBlocked() || _formBusy;
+}
+window.addEventListener('online', updateOfflineUI);
+window.addEventListener('offline', updateOfflineUI);
+/* 購読（予約・車リスト）のエラー：赤帯＋盤面を薄く＋書き込み停止。開いているフォームの保存も即無効化 */
+function markSyncBroken(where, err){
+  console.error(where + ' onSnapshot error:', err);
+  if (_syncBroken) return;
+  _syncBroken = true;
+  document.getElementById('sync-msg').textContent = syncErrorMessage(err && err.code);
+  document.getElementById('sync-note').hidden = false;
+  document.getElementById('board').classList.add('stale');
+  updateOfflineUI();
+}
+window.markSyncBroken = markSyncBroken;
+document.getElementById('sync-reload').addEventListener('click', function(){ location.reload(); });
+
+/* ===== 管理画面（T11）：⚙ → 管理パス → adminSessions → items CRUD ===== */
+var _adminE = {
+  passOverlay: document.getElementById('adminpass-overlay'),
+  passForm: document.getElementById('adminpass-form'),
+  passInput: document.getElementById('ap-input'),
+  passCancel: document.getElementById('ap-cancel'),
+  passOpen: document.getElementById('ap-open'),
+  overlay: document.getElementById('admin-overlay'),
+  list: document.getElementById('admin-list'),
+  addName: document.getElementById('a-name'),
+  addGroup: document.getElementById('a-group'),
+  addBtn: document.getElementById('a-add'),
+  bulkBox: document.getElementById('a-bulk-box'),
+  bulkText: document.getElementById('a-bulk'),
+  bulkGroup: document.getElementById('a-bulk-group'),
+  bulkAdd: document.getElementById('a-bulk-add'),
+  close: document.getElementById('a-close')
+};
+var _adminOk = false;   // このページ表示中に管理パス照合済みか（リロード後は再入力）
+var _adminBusy = false; // 管理操作の二重実行防止
+
+/* 全管理書き込みの前ゲート：オフライン（spec §11）＋操作者名（追補5） */
+function _adminGuard(){
+  if (_alertIfBlocked()) return false;
+  if (!requireOperatorName()){ alert('操作した人のお名前が入力されないと変更できません'); return false; }
+  return true;
+}
+/* busy＋失敗alertの共通ラッパー */
+async function _adminRun(fn){
+  _adminBusy = true;
+  try { await fn(); }
+  catch(err){
+    console.error('admin op error:', err);
+    if (err && err.code === 'permission-denied'){ // 12時間の期限切れ・管理パス変更後など（レビュー③）
+      alert('変更できませんでした。管理の確認が切れたか、権限がありません。管理画面を開き直して、管理パスを入れ直してください。');
+      _adminBusy = false;
+      closeAdminScreen();
+      return;
+    }
+    alert('変更に失敗しました。通信状態を確認して、もう一度お試しください。');
+  } finally { _adminBusy = false; }
+}
+
+function _sessionRef(){
+  return window._fs.doc(window.db, 'rooms/' + window.roomId + '/adminSessions/' + window.currentUser.uid);
+}
+/* 管理セッション確立。adminSessions は update:false のため、既存docは先に消してから create し直す
+   （delete は本人なら常に許可＝rules）。誤パスは create の proof 照合で拒否される。
+   at はサーバー時刻（rules が request.time 一致を強制）＝作成から12時間で失効する（レビュー③） */
+async function enterAdmin(pass){
+  var fs = window._fs;
+  var proof = await adminProofOf(window.roomId, pass);
+  var ref = _sessionRef();
+  try { await fs.deleteDoc(ref); } catch(e){}
+  await fs.setDoc(ref, { proof: proof, at: fs.serverTimestamp() });
+}
+window.enterAdmin = enterAdmin;
+/* 管理画面を閉じたら鍵（セッション）を返す。消せなくても12時間で切れる。
+   進行中の管理操作より後に送られる（同じ端末の書き込みは送った順に処理される） */
+function leaveAdmin(){
+  _adminOk = false;
+  if (!window._fs || !window.currentUser) return;
+  window._fs.deleteDoc(_sessionRef()).catch(function(e){ console.error('leaveAdmin error:', e); });
+}
+
+function _itemRef(id){
+  return window._fs.doc(window.db, 'rooms/' + window.roomId + '/items/' + id);
+}
+function _aBtn(label, aria, fn){
+  var b = document.createElement('button');
+  b.type = 'button'; b.className = 'a-btn'; b.textContent = label;
+  b.setAttribute('aria-label', aria);
+  b.addEventListener('click', fn);
+  return b;
+}
+function renderAdminList(){
+  var box = _adminE.list; box.textContent = '';
+  var rows = sortItems(itemsCache);
+  var lastGroup = null;
+  rows.forEach(function(it){
+    if (it.group !== lastGroup){
+      lastGroup = it.group;
+      var gh = document.createElement('div'); gh.className = 'admin-group-head';
+      gh.textContent = (it.group === 'car') ? '🚗 車' : 'その他';
+      box.appendChild(gh);
+    }
+    var inactive = (it.active === false);
+    var row = document.createElement('div');
+    row.className = 'admin-row' + (inactive ? ' inactive' : '');
+    var nm = document.createElement('span'); nm.className = 'a-name';
+    nm.textContent = it.name + (inactive ? '（停止中）' : '');
+    nm.title = nm.textContent;
+    row.appendChild(nm);
+    row.appendChild(_aBtn('↑', it.name + 'を上へ', function(){ _moveItem(it.id, -1); }));
+    row.appendChild(_aBtn('↓', it.name + 'を下へ', function(){ _moveItem(it.id, 1); }));
+    row.appendChild(_aBtn('名前', it.name + 'の名前を変更', function(){ _renameItem(it); }));
+    row.appendChild(_aBtn(it.group === 'car' ? 'その他へ' : '車へ', it.name + 'のグループを変更', function(){ _regroupItem(it); }));
+    row.appendChild(_aBtn(inactive ? '再開' : '停止', it.name + 'を' + (inactive ? '再開' : '停止'), function(){ _toggleItem(it); }));
+    box.appendChild(row);
+  });
+  if (!rows.length){
+    var em = document.createElement('p'); em.className = 'note';
+    em.textContent = 'アイテムがまだ登録されていません。下の「まとめて追加」で一度に登録できます。';
+    box.appendChild(em);
+  }
+}
+function openAdminScreen(){
+  renderAdminList();
+  if (!itemsCache.length) _adminE.bulkBox.open = true; // 空のときは最初から開く（開いた時だけ。再描画で開き直さない）
+  _adminE.overlay.hidden = false;
+}
+window.openAdminScreen = openAdminScreen;
+function closeAdminScreen(){
+  _adminE.overlay.hidden = true;
+  if (_adminOk) leaveAdmin(); // 次に開くときは管理パスを聞き直す（レビュー③）
+}
+
+function _moveItem(id, dir){
+  if (_adminBusy || !_adminGuard()) return;
+  var plan = reorderPlan(itemsCache, id, dir);
+  if (!plan) return; // 端＝動かせない
+  _adminRun(async function(){
+    var fs = window._fs, batch = fs.writeBatch(window.db);
+    plan.forEach(function(p){ batch.update(_itemRef(p.id), { order: p.order }); });
+    await batch.commit();
+  });
+}
+function _renameItem(it){
+  if (_adminBusy || !_adminGuard()) return;
+  var n = (window.prompt('新しい名前を入力してください', it.name) || '').trim().slice(0, 60);
+  if (!n || n === it.name) return;
+  _adminRun(async function(){
+    await window._fs.updateDoc(_itemRef(it.id), { name: n });
+  });
+}
+function _regroupItem(it){
+  if (_adminBusy || !_adminGuard()) return;
+  var ng = (it.group === 'car') ? 'other' : 'car';
+  _adminRun(async function(){ // 移動先グループの末尾に置く
+    await window._fs.updateDoc(_itemRef(it.id), { group: ng, order: nextOrderOf(itemsCache, ng) });
+  });
+}
+function _toggleItem(it){
+  if (_adminBusy || !_adminGuard()) return;
+  var toActive = (it.active === false);
+  if (!toActive && !window.confirm('「' + it.name + '」を停止します。盤面から隠れます（予約が残る日だけ「（停止中）」で表示されます）。よろしいですか？')) return;
+  _adminRun(async function(){ // 物理削除はしない（追補4・論理削除のみ）
+    await window._fs.updateDoc(_itemRef(it.id), { active: toActive });
+  });
+}
+
+/* 配線 */
+(function(){
+  var a = _adminE;
+  document.getElementById('nav-admin').addEventListener('click', function(){
+    if (!_adminGuard()) return; // 入場自体がadminSessions書き込み
+    if (_adminOk){ openAdminScreen(); return; }
+    a.passInput.value = '';
+    a.passOverlay.hidden = false;
+    a.passInput.focus();
+  });
+  a.passCancel.addEventListener('click', function(){ a.passOverlay.hidden = true; });
+  a.passOverlay.addEventListener('click', function(e){ if (e.target === a.passOverlay) a.passOverlay.hidden = true; });
+  a.passForm.addEventListener('submit', async function(ev){
+    ev.preventDefault();
+    if (_adminBusy) return;
+    var pass = a.passInput.value.trim();
+    if (!pass) return;
+    _adminBusy = true; a.passOpen.disabled = true;
+    try {
+      await enterAdmin(pass);
+      _adminOk = true;
+      a.passOverlay.hidden = true;
+      openAdminScreen();
+    } catch(err){
+      console.error('enterAdmin error:', err);
+      if (err && err.code === 'permission-denied') alert('管理パスが違います');
+      else alert('確認に失敗しました。通信状態を確認して、もう一度お試しください。');
+    } finally { _adminBusy = false; a.passOpen.disabled = false; }
+  });
+  a.close.addEventListener('click', closeAdminScreen);
+  a.overlay.addEventListener('click', function(e){ if (e.target === a.overlay) closeAdminScreen(); });
+  document.addEventListener('keydown', function(e){
+    if (e.key !== 'Escape') return;
+    if (!a.passOverlay.hidden) a.passOverlay.hidden = true;
+    else if (!a.overlay.hidden) closeAdminScreen();
+  });
+  a.addBtn.addEventListener('click', function(){
+    if (_adminBusy || !_adminGuard()) return;
+    var n = a.addName.value.trim();
+    if (!n){ alert('名前を入力してください'); return; }
+    var g = (a.addGroup.value === 'other') ? 'other' : 'car';
+    _adminRun(async function(){
+      await window._fs.addDoc(window._fs.collection(window.db, 'rooms/' + window.roomId + '/items'),
+        { name: n, group: g, order: nextOrderOf(itemsCache, g), active: true });
+      a.addName.value = '';
+    });
+  });
+  /* まとめて追加（初期一覧の内蔵をやめた代わり）：手元の docs/車リスト_初期一覧.md を貼り付けて使う */
+  a.bulkAdd.addEventListener('click', function(){
+    if (_adminBusy || !_adminGuard()) return;
+    var plan = bulkItemRows(a.bulkText.value, a.bulkGroup.value, itemsCache);
+    if (!plan.rows.length){
+      alert(plan.skipped.length ? '入力した名前は、どれも登録済みでした' : '名前を1行に1つ入力してください');
+      return;
+    }
+    if (plan.rows.length > 25){ alert('一度に追加できるのは25件までです（いま ' + plan.rows.length + ' 件）'); return; }
+    var gName = (plan.rows[0].group === 'car') ? '車' : 'その他';
+    if (!window.confirm(plan.rows.length + '件を「' + gName + '」に追加します。' +
+        (plan.skipped.length ? '（登録済み・重複の ' + plan.skipped.length + ' 件は飛ばします）' : '') + 'よろしいですか？')) return;
+    _adminRun(async function(){ // 1バッチで書く（25件まで＝rules の照会上限に当たらないことを契約テストで確認済み）
+      var fs = window._fs, batch = fs.writeBatch(window.db);
+      var col = fs.collection(window.db, 'rooms/' + window.roomId + '/items');
+      plan.rows.forEach(function(r){ batch.set(fs.doc(col), r); });
+      await batch.commit();
+      a.bulkText.value = '';
+    });
+  });
+})();
+
+/* フォームの配線 */
+(function(){
+  var f = _fmE;
+  f.name.addEventListener('input', _updateSwatch);
+  f.cancel.addEventListener('click', closeForm);
+  f.overlay.addEventListener('click', function(e){ if (e.target === f.overlay) closeForm(); });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && !f.overlay.hidden) closeForm();
+  });
+  f.form.addEventListener('submit', async function(ev){
+    ev.preventDefault();
+    if (f.save.disabled) return;
+    if (_alertIfBlocked()) return;
+    var opName = requireOperatorName(); // 全書き込み前の操作者名ゲート（追補5）
+    if (!opName){ alert('操作した人のお名前が入力されないと登録できません'); return; }
+    var editing = _editing; // closeFormでnullになる前に確保
+    var name = f.name.value.trim();
+    var o = { itemId: f.item.value, date: f.date.value,
+              start: parseInt(f.start.value, 10), end: parseInt(f.end.value, 10),
+              name: name, purpose: f.purpose.value.trim(), memo: f.memo.value.trim(),
+              color: colorForName(name) };
+    if (editing){
+      o.id = editing.id; // 重なり判定の自分除外用
+      /* 他人の予約は確認してから（spec §7.4・年配層の誤操作対策） */
+      if (editing.prev.createdBy !== window.currentUser.uid &&
+          !window.confirm('〈' + editing.prev.name + '〉さんの予約を変更します。よろしいですか？')) return;
+    }
+    _formBusy = true; updateOfflineUI();
+    try {
+      if (editing){
+        if (await updateReservation(o, opName)){
+          closeForm();
+          var prevE = editing.prev;
+          var moved = (o.date !== currentDate);
+          if (moved) goDate(o.date); // 別の日へ動かしたら、その日を表示（レビュー⑥）
+          showUndoToast('予約を変更しました' + (moved ? '（' + _dateLabelOf(o.date) + 'へ移しました）' : ''), function(op2){
+            return _restoreEdited(prevE, op2).then(function(){
+              if (prevE.date !== currentDate) goDate(prevE.date); // 元の日へ戻したら、元の日を表示
+            });
+          });
+        }
+      } else if (await saveReservation(o, opName)){
+        lsSet('haisha_resName', o.name);
+        _pushRecentName(o.name);
+        closeForm();
+        if (o.date !== currentDate){ // 別の日に登録したら、その日を表示（台帳#13・レビュー⑥）
+          goDate(o.date);
+          showInfoToast(_dateLabelOf(o.date) + 'に登録しました。その日の表を表示しています');
+        }
+      }
+    } catch(err){
+      console.error('saveReservation error:', err);
+      alert('保存に失敗しました。通信状態を確認して、もう一度お試しください。');
+    } finally {
+      _formBusy = false; updateOfflineUI();
+    }
+  });
+  /* 削除（編集フォーム内のみ表示）→ Undoトースト（spec §7.4） */
+  f.del.addEventListener('click', async function(){
+    if (f.del.disabled || !_editing) return;
+    if (_alertIfBlocked()) return;
+    var opName = requireOperatorName();
+    if (!opName){ alert('操作した人のお名前が入力されないと削除できません'); return; }
+    var prev = _editing.prev;
+    if (prev.createdBy !== window.currentUser.uid &&
+        !window.confirm('〈' + prev.name + '〉さんの予約を削除します。よろしいですか？')) return;
+    _formBusy = true; updateOfflineUI();
+    try {
+      await deleteReservation(prev.id);
+      closeForm();
+      showUndoToast('予約を削除しました', function(op2){ return _restoreDeleted(prev, op2); });
+    } catch(err){
+      console.error('deleteReservation error:', err);
+      alert('削除に失敗しました。通信状態を確認して、もう一度お試しください。');
+    } finally {
+      _formBusy = false; updateOfflineUI();
+    }
+  });
+})();
+
+/* 盤面のポインター操作：PC(mouse/pen)=ドラッグで時間幅確保／スマホ(touch)=tapのみ（ドラッグ無効・spec §9） */
+(function(){
+  var board = document.getElementById('board');
+  var drag = null; // {itemId, lane, sel, a, b, pid}
+  var tap = null;  // {lane, x, y, min}
+  function laneMin(lane, clientX){
+    return pxToMin(clientX - lane.getBoundingClientRect().left, _cellW());
+  }
+  function updateSel(){
+    var r = normalizeRange(drag.a, drag.b), cw = _cellW();
+    drag.sel.style.left = (r.start / 10 * cw) + 'px';
+    drag.sel.style.width = ((r.end - r.start) / 10 * cw) + 'px';
+  }
+  function cleanupDrag(){
+    if (!drag) return;
+    if (drag.sel.parentNode) drag.sel.remove();
+    try { drag.lane.releasePointerCapture(drag.pid); } catch(e){}
+    drag = null;
+    window._dndActive = false;
+    window._applyPendingSnapshot(); // ドラッグ中に保留したsnapshotを必ず反映（追補8）
+  }
+  board.addEventListener('pointerdown', function(e){
+    if (_writeBlocked()) return; // 閲覧のみ（T10・レビュー②）。黄色/赤の帯が理由を説明している
+    var lane = e.target.closest('.lane');
+    if (!lane || lane.classList.contains('inactive')) return;
+    if (e.target.closest('.bar')) return; // バー上は編集（下のclickリスナー）の領分
+    var m = laneMin(lane, e.clientX);
+    if (e.pointerType === 'touch'){ tap = { lane: lane, x: e.clientX, y: e.clientY, min: m }; return; }
+    if (e.button !== 0) return;
+    drag = { itemId: lane.dataset.item, lane: lane, a: m, b: m, pid: e.pointerId,
+             sel: document.createElement('div') };
+    drag.sel.className = 'drag-sel';
+    lane.appendChild(drag.sel);
+    updateSel();
+    try { lane.setPointerCapture(e.pointerId); } catch(err){}
+    window._dndActive = true;
+    e.preventDefault(); // ドラッグ中のテキスト選択を抑止
+  });
+  board.addEventListener('pointermove', function(e){
+    if (!drag || e.pointerId !== drag.pid) return;
+    drag.b = laneMin(drag.lane, e.clientX);
+    updateSel();
+  });
+  board.addEventListener('pointerup', function(e){
+    if (drag && e.pointerId === drag.pid){
+      var d = drag, r;
+      cleanupDrag();
+      if (d.a === d.b){ var s = Math.min(d.a, 1380); r = { start: s, end: s + 60 }; } // クリックだけ＝1時間
+      else { r = normalizeRange(d.a, d.b); }
+      openCreateForm(d.itemId, r.start, r.end);
+      return;
+    }
+    if (tap && e.pointerType === 'touch'){
+      var t = tap; tap = null;
+      if (Math.abs(e.clientX - t.x) > 10 || Math.abs(e.clientY - t.y) > 10) return; // スクロールだった
+      var s2 = Math.min(t.min, 1380);
+      openCreateForm(t.lane.dataset.item, s2, s2 + 60);
+    }
+  });
+  board.addEventListener('pointercancel', function(){ cleanupDrag(); tap = null; });
+  /* 予約バーtap/クリック → 編集フォーム（T10）。スクロール操作ではclickは発火しない */
+  board.addEventListener('click', function(e){
+    var bar = e.target.closest('.bar');
+    if (bar) openEditForm(bar.dataset.id); // オフライン中も開ける（メモ閲覧）。保存/削除は無効化済み
+  });
+})();
+
+/* --- 50日 sweep（T12・spec §6 v1.4）：expireAt<now を削除。1日1回に間引く --- */
+/* 削除は誰でも可（追加権限不要）。取り切るまでバッチループ（固定件数では滞留する） */
+async function sweepOnce(){
+  var today = dateKeyOf(new Date()); // JST基準。toISOString()は使わない（UTCで前日扱いになる・追補7）
+  if (lsGet('haisha_lastSweep') === today) return; // 同日はスキップ
+  var fs = window._fs, db = window.db, room = window.roomId;
+  try {
+    for (var batch = 0; batch < 5; batch++){          // 最大 100件×5 = 500件/回
+      var q = fs.query(fs.collection(db, 'rooms/' + room + '/reservations'),
+        fs.where('expireAt', '<', new Date()), fs.limit(100));
+      var snap = await fs.getDocs(q);
+      for (var i = 0; i < snap.docs.length; i++){ await fs.deleteDoc(snap.docs[i].ref); }
+      if (snap.docs.length < 100) break;              // 取り切った
+    }
+    lsSet('haisha_lastSweep', today); // 完走したときだけ間引きキーを立てる（途中失敗は次回起動で再試行）
+  } catch(e){
+    console.error('sweep error:', e); // オフライン・権限失敗でも起動は止めない
+  }
+}
+window.sweepOnce = sweepOnce; // 検証用（Produces: sweepOnce）
+
+/* --- 初回だけの使い方カード（T12・spec §7.7）：既読フラグが無ければ1度だけ重ねて表示 --- */
+function maybeShowGuide(){
+  if (lsGet('haisha_seenGuide')) return;
+  document.getElementById('guide-overlay').hidden = false;
+}
+(function(){
+  var close = document.getElementById('guide-close');
+  if (!close) return;
+  close.addEventListener('click', function(){
+    lsSet('haisha_seenGuide', '1'); // 以後は表示しない
+    document.getElementById('guide-overlay').hidden = true;
+  });
+})();
+
+/* --- ルーム解決（#r=<64hex> があれば本体へ・なければ合言葉入力） --- */
+var _appStarted = false;
+function startApp(){
+  if (_appStarted) return;
+  _appStarted = true;
+  /* 起動シーケンス固定（spec §7.7）：ルーム確定→今日を購読→（T12: sweep→初回カード） */
+  var fs = window._fs, db = window.db, room = window.roomId;
+  _unsubItems = fs.onSnapshot(fs.collection(db, 'rooms/' + room + '/items'), function(snap){
+    if (window._dndActive){ window._pendingItemsSnapshot = snap; return; } // ドラッグ中は保持（台帳#6）
+    applyItemsSnap(snap);
+  }, function(err){ markSyncBroken('items', err); }); // 無言で止めない（レビュー②）
+  goDate(dateKeyOf(new Date())); // 初期表示日＝今日（ヘッダーも同時に更新）
+  sweepOnce(); // 50日sweep（T12・spec §7.7）。中でtry/catch済み・失敗しても起動は続行
+  maybeShowGuide(); // 初回だけ使い方カードを重ねて表示（T12・spec §7.7）。sweepの完了は待たない
+  updateOfflineUI(); // 起動時からオフラインの場合もバナーを出す（T10）
+  _nowTimer = setInterval(function(){
+    checkDayRollover(); // 開いたまま0時を越えたら今日へ（レビュー①）
+    updateNowLine();
+    updateDateNav(); // 深夜0時を跨いだら「今日」ボタンの無効化を解除するため
+  }, 30000); // 表示のみ・毎回Dateから再計算（endTime方式は不要）
+}
+function resolveRoomThenStart(){
+  var h = location.hash.match(/r=([0-9a-f]{64})/);
+  if (h){ window.roomId = h[1]; showScreen('app'); startApp(); return; }
+  showScreen('pass');
+}
+
+/* --- 合言葉画面の配線 --- */
+(function(){
+  var input = document.getElementById('pass-input');
+  var hint = document.getElementById('pass-hint');
+  var btn = document.getElementById('pass-btn');
+  input.addEventListener('input', function(){
+    var t = input.value.trim();
+    if (!t){ hint.textContent = ''; hint.className = 'pass-hint'; btn.disabled = true; return; }
+    var prob = passProblem(t);
+    if (prob){ hint.textContent = prob; hint.className = 'pass-hint'; btn.disabled = true; return; }
+    var warn = passWarning(t); // 施設名系＝注意だけ・発行は可能（案1）
+    hint.textContent = warn || '✓ この合言葉で発行できます';
+    hint.className = warn ? 'pass-hint warn' : 'pass-hint ok';
+    btn.disabled = false;
+  });
+  btn.addEventListener('click', function(){
+    var t = input.value.trim();
+    if (!t || passProblem(t) !== '') return;
+    btn.disabled = true;
+    roomIdFromPass(t).then(function(rid){
+      window.roomId = rid;
+      location.hash = '#r=' + rid; // 以後この URL が共有リンク（合言葉の生値は載せない）
+      showScreen('app'); startApp();
+    }).catch(showFatal);
+  });
+})();
+
+/* --- Firebase 初期化＋App Check＋匿名認証（plain script内 dynamic import） --- */
+(async function(){
+  var appMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+  var authMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+  var fsMod   = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+  var appCheckMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js');
+  var app = appMod.initializeApp(FIREBASE_CONFIG);
+  // localhost検証用：App Checkデバッグトークンを有効化（本番ドメインでは発動しない）
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  }
+  appCheckMod.initializeAppCheck(app, {
+    provider: new appCheckMod.ReCaptchaV3Provider(RECAPTCHA_SITE_KEY),
+    isTokenAutoRefreshEnabled: true
+  });
+  window.db = fsMod.getFirestore(app);
+  window._fs = fsMod; // 後続タスクで collection/doc/onSnapshot 等を使う
+  var auth = authMod.getAuth(app);
+  await authMod.setPersistence(auth, authMod.browserLocalPersistence);
+  var _resolved = false;
+  authMod.onAuthStateChanged(auth, function(u){
+    window.currentUser = u;
+    if (u && !_resolved){ _resolved = true; resolveRoomThenStart(); }
+  });
+  await authMod.signInAnonymously(auth);
+})().catch(showFatal);
+})();
+</script>
+</body>
+</html>
